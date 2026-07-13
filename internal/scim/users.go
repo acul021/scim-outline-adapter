@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -49,8 +50,9 @@ func toSCIMUser(r *http.Request, u *outline.User) User {
 }
 
 // primaryEmail returns the resource's login email: the primary (or first)
-// emails entry, falling back to userName. authentik's default SCIM mapping
-// sets userName to the username — not an address — so emails must win.
+// emails entry. userName is deliberately NOT a fallback — authentik's default
+// SCIM mapping sets it to the username, not an address, and inviting a
+// non-address makes Outline reject the create; better to fail loudly here.
 func (u *User) primaryEmail() string {
 	for _, e := range u.Emails {
 		if e.Primary && e.Value != "" {
@@ -60,7 +62,7 @@ func (u *User) primaryEmail() string {
 	if len(u.Emails) > 0 && u.Emails[0].Value != "" {
 		return u.Emails[0].Value
 	}
-	return u.UserName
+	return ""
 }
 
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +73,7 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	email := in.primaryEmail()
 	if email == "" {
-		writeError(w, http.StatusBadRequest, "invalidValue", "userName or a primary email is required")
+		writeError(w, http.StatusBadRequest, "invalidValue", "an emails entry with an address is required")
 		return
 	}
 	name := joinName(in.Name)
@@ -282,11 +284,13 @@ func pageParams(r *http.Request) (start, count int) {
 	return start, count
 }
 
-// fail maps an Outline error to a SCIM error response.
+// fail maps an Outline error to a SCIM error response. Upstream failures are
+// logged here because the access log only carries the resulting status code.
 func (s *Server) fail(w http.ResponseWriter, err error) {
 	if errors.Is(err, outline.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "", "resource not found")
 		return
 	}
+	slog.Error("outline request failed", "err", err)
 	writeError(w, http.StatusBadGateway, "", err.Error())
 }

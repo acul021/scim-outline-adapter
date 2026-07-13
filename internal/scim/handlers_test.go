@@ -72,7 +72,7 @@ func TestUserCreateGetAndAdopt(t *testing.T) {
 	h := s.Handler()
 
 	rec := do(t, h, "POST", "/scim/v2/Users",
-		`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"scim-test-1@example.com","name":{"givenName":"Scim","familyName":"Test"},"externalId":"ext-1","active":true}`)
+		`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"scim-test-1","emails":[{"value":"scim-test-1@example.com","primary":true}],"name":{"givenName":"Scim","familyName":"Test"},"externalId":"ext-1","active":true}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create: want 201, got %d body=%s", rec.Code, rec.Body.String())
 	}
@@ -93,7 +93,7 @@ func TestUserCreateGetAndAdopt(t *testing.T) {
 
 	// Re-create with the same email -> adoption returns 200, same id.
 	rec = do(t, h, "POST", "/scim/v2/Users",
-		`{"userName":"scim-test-1@example.com","name":{"givenName":"Scim","familyName":"Test"}}`)
+		`{"userName":"scim-test-1","emails":[{"value":"scim-test-1@example.com","primary":true}],"name":{"givenName":"Scim","familyName":"Test"}}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("adopt: want 200, got %d", rec.Code)
 	}
@@ -107,7 +107,7 @@ func TestUserCreateGetAndAdopt(t *testing.T) {
 func TestUserListFilterByUserName(t *testing.T) {
 	s, _ := testServer()
 	h := s.Handler()
-	do(t, h, "POST", "/scim/v2/Users", `{"userName":"a@example.com"}`)
+	do(t, h, "POST", "/scim/v2/Users", `{"userName":"a","emails":[{"value":"a@example.com","primary":true}]}`)
 
 	rec := do(t, h, "GET", `/scim/v2/Users?filter=userName+eq+%22a@example.com%22`, "")
 	var lr ListResponse
@@ -127,7 +127,7 @@ func TestUserListFilterByUserName(t *testing.T) {
 func TestUserPatchActive(t *testing.T) {
 	s, fc := testServer()
 	h := s.Handler()
-	rec := do(t, h, "POST", "/scim/v2/Users", `{"userName":"c@example.com"}`)
+	rec := do(t, h, "POST", "/scim/v2/Users", `{"userName":"c","emails":[{"value":"c@example.com","primary":true}]}`)
 	var u User
 	decode(t, rec, &u)
 
@@ -150,7 +150,7 @@ func TestUserPatchActive(t *testing.T) {
 func TestUserDeleteSuspends(t *testing.T) {
 	s, fc := testServer() // hardDelete=false
 	h := s.Handler()
-	rec := do(t, h, "POST", "/scim/v2/Users", `{"userName":"d@example.com"}`)
+	rec := do(t, h, "POST", "/scim/v2/Users", `{"userName":"d","emails":[{"value":"d@example.com","primary":true}]}`)
 	var u User
 	decode(t, rec, &u)
 
@@ -173,7 +173,7 @@ func TestRoleDerivationFlow(t *testing.T) {
 	s, fc := testServer()
 	h := s.Handler()
 
-	rec := do(t, h, "POST", "/scim/v2/Users", `{"userName":"member@example.com"}`)
+	rec := do(t, h, "POST", "/scim/v2/Users", `{"userName":"member","emails":[{"value":"member@example.com","primary":true}]}`)
 	var u User
 	decode(t, rec, &u)
 
@@ -230,7 +230,7 @@ func TestSuspendedUserRoleRecomputeSkipped(t *testing.T) {
 	h := s.Handler()
 
 	var u User
-	decode(t, do(t, h, "POST", "/scim/v2/Users", `{"userName":"susp@example.com"}`), &u)
+	decode(t, do(t, h, "POST", "/scim/v2/Users", `{"userName":"susp","emails":[{"value":"susp@example.com","primary":true}]}`), &u)
 	var g Group
 	decode(t, do(t, h, "POST", "/scim/v2/Groups", `{"displayName":"Editors"}`), &g)
 	do(t, h, "PATCH", "/scim/v2/Groups/"+g.ID,
@@ -252,8 +252,8 @@ func TestGroupPutReconcilesMembers(t *testing.T) {
 
 	// Two users.
 	var u1, u2 User
-	decode(t, do(t, h, "POST", "/scim/v2/Users", `{"userName":"one@example.com"}`), &u1)
-	decode(t, do(t, h, "POST", "/scim/v2/Users", `{"userName":"two@example.com"}`), &u2)
+	decode(t, do(t, h, "POST", "/scim/v2/Users", `{"userName":"one","emails":[{"value":"one@example.com","primary":true}]}`), &u1)
+	decode(t, do(t, h, "POST", "/scim/v2/Users", `{"userName":"two","emails":[{"value":"two@example.com","primary":true}]}`), &u2)
 
 	var g Group
 	decode(t, do(t, h, "POST", "/scim/v2/Groups", `{"displayName":"Staff","members":[{"value":"`+u1.ID+`"}]}`), &g)
