@@ -40,13 +40,13 @@ type Config struct {
 // required values are missing.
 func FromEnv() (*Config, error) {
 	c := &Config{
-		ListenAddr:      os.Getenv("LISTEN_ADDR"),
-		SCIMToken:       os.Getenv("SCIM_TOKEN"),
-		OutlineURL:      strings.TrimRight(os.Getenv("OUTLINE_URL"), "/"),
-		OutlineToken:    os.Getenv("OUTLINE_TOKEN"),
-		RoleMapAdmin:    splitCSV(os.Getenv("ROLE_MAP_ADMIN")),
-		RoleMapMember:   splitCSV(os.Getenv("ROLE_MAP_MEMBER")),
-		RoleMapViewer:   splitCSV(os.Getenv("ROLE_MAP_VIEWER")),
+		ListenAddr:           os.Getenv("LISTEN_ADDR"),
+		SCIMToken:            os.Getenv("SCIM_TOKEN"),
+		OutlineURL:           strings.TrimRight(os.Getenv("OUTLINE_URL"), "/"),
+		OutlineToken:         os.Getenv("OUTLINE_TOKEN"),
+		RoleMapAdmin:         splitCSV(os.Getenv("ROLE_MAP_ADMIN")),
+		RoleMapMember:        splitCSV(os.Getenv("ROLE_MAP_MEMBER")),
+		RoleMapViewer:        splitCSV(os.Getenv("ROLE_MAP_VIEWER")),
 		HardDeleteUsers:      os.Getenv("HARD_DELETE_USERS") == "true",
 		SuppressInviteEmails: os.Getenv("SUPPRESS_INVITE_EMAILS") != "false",
 	}
