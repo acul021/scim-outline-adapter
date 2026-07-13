@@ -28,6 +28,12 @@ type Config struct {
 	// HardDeleteUsers switches SCIM DELETE /Users/{id} from suspend to a
 	// permanent users.delete. active=false always suspends regardless.
 	HardDeleteUsers bool
+
+	// SuppressInviteEmails stops Outline from mailing an invite for every
+	// SCIM-provisioned user. Defaults to true: with IdP-driven provisioning the
+	// account is claimed via SSO email match, so invite mail is just noise —
+	// set SUPPRESS_INVITE_EMAILS=false to restore Outline's default behavior.
+	SuppressInviteEmails bool
 }
 
 // FromEnv builds a Config from environment variables and returns an error if
@@ -41,7 +47,8 @@ func FromEnv() (*Config, error) {
 		RoleMapAdmin:    splitCSV(os.Getenv("ROLE_MAP_ADMIN")),
 		RoleMapMember:   splitCSV(os.Getenv("ROLE_MAP_MEMBER")),
 		RoleMapViewer:   splitCSV(os.Getenv("ROLE_MAP_VIEWER")),
-		HardDeleteUsers: os.Getenv("HARD_DELETE_USERS") == "true",
+		HardDeleteUsers:      os.Getenv("HARD_DELETE_USERS") == "true",
+		SuppressInviteEmails: os.Getenv("SUPPRESS_INVITE_EMAILS") != "false",
 	}
 
 	if c.SCIMToken == "" {

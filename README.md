@@ -32,6 +32,7 @@ users and groups. Every lookup is resolved against Outline directly.
 | `ROLE_MAP_MEMBER` | no | — | Comma-separated group displayNames whose members become Outline `member`. |
 | `ROLE_MAP_VIEWER` | no | — | Comma-separated group displayNames mapped to `viewer` (the default anyway). |
 | `HARD_DELETE_USERS` | no | `false` | If `false`, `DELETE /Users/{id}` and `active=false` suspend the user. If `true`, `DELETE` permanently deletes. |
+| `SUPPRESS_INVITE_EMAILS` | no | `true` | Ask Outline not to send invite mails for SCIM-provisioned users (accounts are claimed via SSO email match anyway). Set to `false` to restore Outline's default invite mail. |
 
 ### Role mapping
 

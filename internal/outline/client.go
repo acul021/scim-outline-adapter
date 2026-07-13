@@ -49,6 +49,10 @@ type Client struct {
 	baseURL string
 	token   string
 	http    *http.Client
+
+	// SuppressInviteEmails asks Outline not to mail an invite for users created
+	// via users.invite (Outline's suppressEmail flag).
+	SuppressInviteEmails bool
 }
 
 // New builds a Client. baseURL is the instance root (without /api); token is an
@@ -147,7 +151,10 @@ func (c *Client) InviteUser(ctx context.Context, email, name, role string) (*Use
 			Users []User `json:"users"`
 		} `json:"data"`
 	}
-	body := map[string]any{"invites": []map[string]string{{"email": email, "name": name, "role": role}}}
+	body := map[string]any{
+		"invites":       []map[string]string{{"email": email, "name": name, "role": role}},
+		"suppressEmail": c.SuppressInviteEmails,
+	}
 	if err := c.post(ctx, "users.invite", body, &resp); err != nil {
 		return nil, err
 	}

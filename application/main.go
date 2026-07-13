@@ -29,6 +29,7 @@ func main() {
 	}
 
 	client := outline.New(cfg.OutlineURL, cfg.OutlineToken)
+	client.SuppressInviteEmails = cfg.SuppressInviteEmails
 	server := scim.NewServer(client, scim.RoleMap{
 		Admin:  cfg.RoleMapAdmin,
 		Member: cfg.RoleMapMember,
