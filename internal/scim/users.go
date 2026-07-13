@@ -48,21 +48,19 @@ func toSCIMUser(r *http.Request, u *outline.User) User {
 	}
 }
 
-// primaryEmail returns the resource's login email: userName, falling back to the
-// primary (or first) emails entry.
+// primaryEmail returns the resource's login email: the primary (or first)
+// emails entry, falling back to userName. authentik's default SCIM mapping
+// sets userName to the username — not an address — so emails must win.
 func (u *User) primaryEmail() string {
-	if u.UserName != "" {
-		return u.UserName
-	}
 	for _, e := range u.Emails {
-		if e.Primary {
+		if e.Primary && e.Value != "" {
 			return e.Value
 		}
 	}
-	if len(u.Emails) > 0 {
+	if len(u.Emails) > 0 && u.Emails[0].Value != "" {
 		return u.Emails[0].Value
 	}
-	return ""
+	return u.UserName
 }
 
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
