@@ -83,7 +83,8 @@ Outline id → `externalId` in that file:
   `externalId`. Their Outline id stays the only key. They get an entry once a
   client creates them with an `externalId`, which adopts the account by email.
 
-The file must be on persistent storage. If it is lost, the next Pocket ID sync
+Missing parent directories are created at startup. The file must be on
+persistent storage. If it is lost, the next Pocket ID sync
 sees no known users and suspends all of them.
 
 Things to know about Pocket ID:

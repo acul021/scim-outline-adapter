@@ -24,10 +24,14 @@ type FileStore struct {
 	byExt map[string]string // externalId -> outline id
 }
 
-// Open loads the mapping from path, creating the file if it does not exist so a
-// missing volume or wrong permissions fail at startup, not on the first write.
+// Open loads the mapping from path, creating the file and its parent
+// directories if they do not exist so wrong permissions fail at startup, not on
+// the first write.
 func Open(path string) (*FileStore, error) {
 	s := &FileStore{path: path, byID: map[string]string{}, byExt: map[string]string{}}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("create directory for %s: %w", path, err)
+	}
 
 	data, err := os.ReadFile(path)
 	switch {

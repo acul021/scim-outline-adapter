@@ -1,6 +1,7 @@
 package extid
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -34,6 +35,20 @@ func TestFileStoreRoundTrip(t *testing.T) {
 	}
 	if _, ok := re.Lookup("ext-1"); ok {
 		t.Fatal("ext-1 still mapped after delete")
+	}
+}
+
+func TestFileStoreCreatesParentDirs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a", "b", "extid.json")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set("u1", "ext-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("file not created: %v", err)
 	}
 }
 
