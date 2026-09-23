@@ -1,6 +1,7 @@
 // Package scim implements a SCIM 2.0 (RFC 7643/7644) server that translates
-// provisioning requests into Outline API calls. There is no local state: the
-// SCIM resource id is the Outline UUID for both users and groups.
+// provisioning requests into Outline API calls. The SCIM resource id is the
+// Outline UUID for both users and groups. The only local state is the optional
+// user externalId mapping (see ExternalIDStore).
 package scim
 
 import (

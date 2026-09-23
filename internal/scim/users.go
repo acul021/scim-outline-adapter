@@ -36,16 +36,18 @@ func decodeUser(r *http.Request) (User, bool, error) {
 }
 
 // toSCIMUser maps an Outline user to a SCIM user resource. Outline does not
-// store externalId for users, so it is omitted (authentik matches on id).
-func toSCIMUser(r *http.Request, u *outline.User) User {
+// store externalId for users; it comes from the external id store and is
+// omitted when the store has no entry (authentik matches on id anyway).
+func (s *Server) toSCIMUser(r *http.Request, u *outline.User) User {
 	return User{
-		Schemas:  []string{schemaUser},
-		ID:       u.ID,
-		UserName: u.Email,
-		Name:     splitName(u.Name),
-		Emails:   []Email{{Value: u.Email, Primary: true, Type: "work"}},
-		Active:   !u.IsSuspended,
-		Meta:     &Meta{ResourceType: "User", Location: location(r, "Users", u.ID)},
+		Schemas:    []string{schemaUser},
+		ID:         u.ID,
+		ExternalID: s.extIDs.Get(u.ID),
+		UserName:   u.Email,
+		Name:       splitName(u.Name),
+		Emails:     []Email{{Value: u.Email, Primary: true, Type: "work"}},
+		Active:     !u.IsSuspended,
+		Meta:       &Meta{ResourceType: "User", Location: location(r, "Users", u.ID)},
 	}
 }
 
@@ -120,7 +122,10 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, status, toSCIMUser(r, created))
+	if !s.storeExternalID(w, created.ID, in.ExternalID) {
+		return
+	}
+	writeJSON(w, status, s.toSCIMUser(r, created))
 }
 
 func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +134,7 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toSCIMUser(r, u))
+	writeJSON(w, http.StatusOK, s.toSCIMUser(r, u))
 }
 
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
@@ -151,8 +156,22 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 				users = []outline.User{*u}
 			}
 		case "externalid":
-			// Outline stores no externalId for users; an empty result lets
-			// authentik fall through to create, which adopts by email.
+			// Resolved through the external id store. Without a mapping the
+			// result is empty and the client falls through to create, which
+			// adopts by email.
+			if id, ok := s.extIDs.Lookup(f.value); ok {
+				u, gerr := s.client.GetUser(ctx, id)
+				switch {
+				case errors.Is(gerr, outline.ErrNotFound):
+					// Deleted in Outline behind our back: drop the stale entry.
+					_ = s.extIDs.Delete(id)
+				case gerr != nil:
+					s.fail(w, gerr)
+					return
+				default:
+					users = []outline.User{*u}
+				}
+			}
 		default:
 			writeError(w, http.StatusBadRequest, "invalidFilter", "unsupported user filter attribute: "+f.attr)
 			return
@@ -168,7 +187,7 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	resources := make([]any, 0)
 	total := len(users)
 	for i := start - 1; i < total && len(resources) < count; i++ {
-		resources = append(resources, toSCIMUser(r, &users[i]))
+		resources = append(resources, s.toSCIMUser(r, &users[i]))
 	}
 	writeJSON(w, http.StatusOK, ListResponse{
 		Schemas:      []string{schemaListResp},
@@ -210,7 +229,10 @@ func (s *Server) putUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusOK, toSCIMUser(r, cur))
+	if !s.storeExternalID(w, id, in.ExternalID) {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.toSCIMUser(r, cur))
 }
 
 func (s *Server) patchUser(w http.ResponseWriter, r *http.Request) {
@@ -250,7 +272,10 @@ func (s *Server) patchUser(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, http.StatusOK, toSCIMUser(r, cur))
+	if res.setExternalID != nil && !s.storeExternalID(w, id, *res.setExternalID) {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.toSCIMUser(r, cur))
 }
 
 func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +291,29 @@ func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	if s.hardDelete {
+		// The account is gone, so its externalId must not resolve anymore. A
+		// suspended user keeps the entry so reactivation finds it again.
+		if err := s.extIDs.Delete(id); err != nil {
+			slog.Error("external id store delete failed", "user", id, "err", err)
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// storeExternalID records externalID for an Outline user. An empty externalID
+// leaves any existing entry alone, since PUT bodies from some clients omit it.
+// It writes an error response and returns false if the store fails.
+func (s *Server) storeExternalID(w http.ResponseWriter, outlineID, externalID string) bool {
+	if externalID == "" {
+		return true
+	}
+	if err := s.extIDs.Set(outlineID, externalID); err != nil {
+		slog.Error("external id store write failed", "user", outlineID, "err", err)
+		writeError(w, http.StatusInternalServerError, "", "could not persist externalId")
+		return false
+	}
+	return true
 }
 
 // pageParams parses SCIM startIndex (1-based) and count query parameters,

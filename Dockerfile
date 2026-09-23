@@ -25,12 +25,17 @@ RUN adduser \
     --uid "${UID}" \
     "${USER}"
 
+# Home of the optional USER_EXTERNAL_ID_FILE. Named volumes mounted here inherit
+# this ownership, so the non-root user can write to them.
+RUN mkdir /data && chown "${UID}:${UID}" /data
+
 FROM scratch
 
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=base /etc/passwd /etc/passwd
 COPY --from=base /etc/group /etc/group
+COPY --from=base --chown=10001:10001 /data /data
 
 ENV TZ=Europe/Berlin
 

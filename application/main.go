@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/acul021/scim-outline-adapter/internal/config"
+	"github.com/acul021/scim-outline-adapter/internal/extid"
 	"github.com/acul021/scim-outline-adapter/internal/outline"
 	"github.com/acul021/scim-outline-adapter/internal/scim"
 )
@@ -35,6 +36,15 @@ func main() {
 		Member: cfg.RoleMapMember,
 		Viewer: cfg.RoleMapViewer,
 	}, cfg.SCIMToken, cfg.HardDeleteUsers)
+	if cfg.UserExternalIDFile != "" {
+		store, err := extid.Open(cfg.UserExternalIDFile)
+		if err != nil {
+			logger.Error("user external id store", "err", err)
+			os.Exit(1)
+		}
+		server.WithExternalIDStore(store)
+		logger.Info("user external id mapping enabled", "file", cfg.UserExternalIDFile)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,

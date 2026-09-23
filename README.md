@@ -6,8 +6,11 @@ A SCIM 2.0 adapter for [Outline](https://www.getoutline.com/), e.g. for use with
 REST API, so an identity provider can provision users and groups — including
 Outline team roles derived from group membership — into an Outline instance.
 
-There is **no local state**: the SCIM resource `id` is the Outline UUID for both
-users and groups. Every lookup is resolved against Outline directly.
+The SCIM resource `id` is the Outline UUID for both users and groups, and every
+lookup is resolved against Outline directly. By default the adapter keeps no
+local state. The one exception is the optional user `externalId` mapping (see
+[User externalId mapping](#user-externalid-mapping)), which SCIM clients like
+Pocket ID need.
 
 ## How it works
 
@@ -32,6 +35,7 @@ users and groups. Every lookup is resolved against Outline directly.
 | `ROLE_MAP_MEMBER` | no | — | Comma-separated group displayNames whose members become Outline `member`. |
 | `ROLE_MAP_VIEWER` | no | — | Comma-separated group displayNames mapped to `viewer` (the default anyway). |
 | `HARD_DELETE_USERS` | no | `false` | If `false`, `DELETE /Users/{id}` and `active=false` suspend the user. If `true`, `DELETE` permanently deletes. |
+| `USER_EXTERNAL_ID_FILE` | no | — | Path to a JSON file for the user `externalId` mapping. Unset disables the mapping. Required for Pocket ID, see below. |
 | `SUPPRESS_INVITE_EMAILS` | no | `true` | Ask Outline not to send invite mails for SCIM-provisioned users (accounts are claimed via SSO email match anyway). Set to `false` to restore Outline's default invite mail. |
 
 ### Role mapping
@@ -52,6 +56,46 @@ ROLE_MAP_ADMIN="Admins"
 ROLE_MAP_MEMBER="Editors,Staff"
 ROLE_MAP_VIEWER="Viewers"
 ```
+
+### User externalId mapping
+
+Outline has no field for a user `externalId`. Without the mapping the adapter
+drops it on write and omits it on read. authentik does not care, because it
+remembers the returned `id`.
+
+Pocket ID does care. It keeps no record of remote ids and matches users only by
+`externalId`. It sends `DELETE` for every user in `GET /Users` whose
+`externalId` it does not know, and it skips groups whose members it cannot
+resolve that way. Without the mapping, a Pocket ID sync suspends every Outline
+user and creates no groups.
+
+Set `USER_EXTERNAL_ID_FILE` to turn the mapping on. The adapter then stores
+Outline id → `externalId` in that file:
+
+- `POST /Users` (including adoption by email), `PUT` and `PATCH` store the
+  `externalId` the client sends. A request without `externalId` leaves an
+  existing entry alone.
+- Responses include the stored `externalId`, and `GET /Users?filter=externalId
+  eq "..."` resolves through the mapping.
+- Hard delete (`HARD_DELETE_USERS=true`) removes the entry. Suspending keeps it,
+  so a reactivated user is found again.
+- Users without an entry, e.g. created before the mapping was enabled, have no
+  `externalId`. Their Outline id stays the only key. They get an entry once a
+  client creates them with an `externalId`, which adopts the account by email.
+
+The file must be on persistent storage. If it is lost, the next Pocket ID sync
+sees no known users and suspends all of them.
+
+Things to know about Pocket ID:
+
+- Pocket ID treats its own user list as complete. Outline users that do not
+  exist in Pocket ID, or are not allowed for the OIDC client, get suspended.
+  That includes the account that owns `OUTLINE_TOKEN`, unless it exists in
+  Pocket ID too. Outline refuses to suspend the token owner (403).
+- Outline groups without a matching `externalId` get deleted, including groups
+  created by hand.
+- On the first sync Pocket ID lists existing users before adopting them, so
+  those users are suspended once and reactivated on the next sync.
 
 ## SCIM endpoints
 
@@ -86,9 +130,9 @@ Configure an authentik **SCIM provider** with:
 Compatibility notes:
 
 - The adapter matches users on `id` (the Outline UUID). Outline does **not**
-  store an `externalId` for users, so `externalId` is omitted from user
-  responses; authentik tolerates this. Group `externalId` **is** stored and
-  round-tripped.
+  store an `externalId` for users, so without `USER_EXTERNAL_ID_FILE` it is
+  omitted from user responses; authentik tolerates this. Group `externalId`
+  **is** stored in Outline and round-tripped.
 - `userName` equals the Outline email and is treated as immutable via PATCH.
 - authentik's usual sequence (POST create, PUT full-update, PATCH membership
   deltas, `active=false` to deactivate) is supported.
@@ -102,6 +146,18 @@ version tags (`vX.Y.Z`) additionally publish `:X.Y.Z` and `:X.Y`
 ```sh
 docker run --rm -p 8080:8080 \
   -e SCIM_TOKEN=... -e OUTLINE_URL=https://wiki.example.com -e OUTLINE_TOKEN=... \
+  ghcr.io/acul021/scim-outline-adapter:latest
+```
+
+With the user `externalId` mapping, mount a volume for the file. The image ships
+`/data` owned by the non-root user (UID 10001), and a named volume mounted there
+inherits that ownership. A bind mount needs `chown 10001:10001` on the host:
+
+```sh
+docker run --rm -p 8080:8080 \
+  -e SCIM_TOKEN=... -e OUTLINE_URL=https://wiki.example.com -e OUTLINE_TOKEN=... \
+  -e USER_EXTERNAL_ID_FILE=/data/user-external-ids.json \
+  -v scim-outline-data:/data \
   ghcr.io/acul021/scim-outline-adapter:latest
 ```
 

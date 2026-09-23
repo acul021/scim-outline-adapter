@@ -34,6 +34,11 @@ type Config struct {
 	// account is claimed via SSO email match, so invite mail is just noise —
 	// set SUPPRESS_INVITE_EMAILS=false to restore Outline's default behavior.
 	SuppressInviteEmails bool
+
+	// UserExternalIDFile, if set, enables the user externalId mapping and names
+	// the JSON file it lives in. Outline cannot store user externalIds, and
+	// clients like Pocket ID match users only by externalId.
+	UserExternalIDFile string
 }
 
 // FromEnv builds a Config from environment variables and returns an error if
@@ -49,6 +54,7 @@ func FromEnv() (*Config, error) {
 		RoleMapViewer:        splitCSV(os.Getenv("ROLE_MAP_VIEWER")),
 		HardDeleteUsers:      os.Getenv("HARD_DELETE_USERS") == "true",
 		SuppressInviteEmails: os.Getenv("SUPPRESS_INVITE_EMAILS") != "false",
+		UserExternalIDFile:   os.Getenv("USER_EXTERNAL_ID_FILE"),
 	}
 
 	if c.SCIMToken == "" {

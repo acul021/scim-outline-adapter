@@ -23,8 +23,9 @@ type patchOp struct {
 // userPatchResult is the reduced intent of a set of user PATCH ops. Nil pointers
 // mean "unchanged"; the handler applies only what is set.
 type userPatchResult struct {
-	setActive *bool
-	setName   *string
+	setActive     *bool
+	setName       *string
+	setExternalID *string
 }
 
 // applyUserPatch reduces user PATCH operations into a userPatchResult. It
@@ -90,9 +91,15 @@ func (res *userPatchResult) applyUserAttr(path string, raw json.RawMessage) erro
 	case "name.givenname", "name.familyname":
 		// A single component alone is not enough to rebuild the full name; the
 		// handler falls back to a PUT for structured renames. Ignore here.
-	case "username", "externalid", "emails", "emails.value":
-		// userName == Outline email, which is immutable via SCIM PATCH; externalId
-		// is not stored for users. Accept silently so authentik does not error.
+	case "externalid":
+		s, err := decodeString(raw)
+		if err != nil {
+			return fmt.Errorf("externalId: %w", err)
+		}
+		res.setExternalID = &s
+	case "username", "emails", "emails.value":
+		// userName == Outline email, which is immutable via SCIM PATCH. Accept
+		// silently so authentik does not error.
 	default:
 		// Unknown attributes are tolerated: authentik sends extra fields we do
 		// not model, and rejecting them would fail otherwise-valid requests.

@@ -34,17 +34,42 @@ type OutlineClient interface {
 	RemoveUserFromGroup(ctx context.Context, groupID, userID string) error
 }
 
+// ExternalIDStore persists user externalIds, which Outline cannot store. Users
+// without an entry have no externalId; their Outline id stays the only key.
+type ExternalIDStore interface {
+	Get(outlineID string) string
+	Lookup(externalID string) (outlineID string, ok bool)
+	Set(outlineID, externalID string) error
+	Delete(outlineID string) error
+}
+
+// noExternalIDs is the default store: user externalIds are dropped.
+type noExternalIDs struct{}
+
+func (noExternalIDs) Get(string) string            { return "" }
+func (noExternalIDs) Lookup(string) (string, bool) { return "", false }
+func (noExternalIDs) Set(string, string) error     { return nil }
+func (noExternalIDs) Delete(string) error          { return nil }
+
 // Server holds the SCIM server dependencies.
 type Server struct {
 	client     OutlineClient
 	roles      RoleMap
 	token      string
 	hardDelete bool
+	extIDs     ExternalIDStore
 }
 
-// NewServer builds a SCIM server.
+// NewServer builds a SCIM server. User externalIds are not stored unless
+// WithExternalIDStore is called.
 func NewServer(client OutlineClient, roles RoleMap, token string, hardDelete bool) *Server {
-	return &Server{client: client, roles: roles, token: token, hardDelete: hardDelete}
+	return &Server{client: client, roles: roles, token: token, hardDelete: hardDelete, extIDs: noExternalIDs{}}
+}
+
+// WithExternalIDStore enables the user externalId mapping.
+func (s *Server) WithExternalIDStore(st ExternalIDStore) *Server {
+	s.extIDs = st
+	return s
 }
 
 // Handler returns the authenticated SCIM router mounted under /scim/v2.
